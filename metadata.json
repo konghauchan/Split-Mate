@@ -1,0 +1,6 @@
+{
+  "name": "SplitMate - Chia Tiền Nhóm",
+  "description": "Ứng dụng tiện ích giúp ghi chép chi phí, quản lý thành viên linh hoạt theo từng hoạt động, và tối ưu giao dịch trả nợ.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

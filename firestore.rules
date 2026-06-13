@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Catch-all default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Access codes mapper
+    match /accessCodes/{code} {
+      allow get: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Main validator for Groups
+    function isValidGroup(group) {
+      return group.id is string
+        && group.name is string
+        && group.name.size() <= 200
+        && group.ownerId is string;
+    }
+
+    match /groups/{groupId} {
+      // Allow gets (detail reads) so that matching UI links and views can render for logged-in members.
+      allow get: if true;
+      
+      // Only authenticated users who own the group can list/query multiple groups
+      allow list: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      
+      // Only the authenticated owner can create/write groups
+      allow create: if request.auth != null 
+        && request.resource.data.ownerId == request.auth.uid
+        && isValidGroup(request.resource.data);
+        
+      allow delete: if request.auth != null 
+        && resource.data.ownerId == request.auth.uid;
+
+      allow update: if (request.auth != null && resource.data.ownerId == request.auth.uid)
+        || (
+          // Unauthenticated member update (only to update profiles or upload receipts)
+          // Keep critical, administrative and financial fields immune to tampering
+          request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.name == resource.data.name
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.expenses == resource.data.expenses
+        );
+    }
+  }
+}

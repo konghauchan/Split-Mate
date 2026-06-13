@@ -7,6 +7,7 @@ interface ExpenseListProps {
   members: Member[];
   onDeleteExpense: (id: string) => void;
   onEditExpense: (expense: Expense) => void;
+  isAdmin?: boolean;
 }
 
 export default function ExpenseList({
@@ -14,6 +15,7 @@ export default function ExpenseList({
   members,
   onDeleteExpense,
   onEditExpense,
+  isAdmin = true,
 }: ExpenseListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterPayerId, setFilterPayerId] = useState("all");
@@ -31,6 +33,9 @@ export default function ExpenseList({
 
   const filteredExpenses = expenses
     .filter((e) => {
+      const isFundTransaction = e.description.includes("[Nộp Quỹ]") || e.description.includes("[Nhận Quỹ]");
+      if (isFundTransaction) return false;
+
       const matchSearch = e.description
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
@@ -130,12 +135,21 @@ export default function ExpenseList({
                 <div className="flex items-start gap-3 flex-1 min-w-0">
                   {/* Payer Mini Badge */}
                   <div
-                    className={`w-9.5 h-9.5 rounded-full flex flex-col items-center justify-center font-bold text-lg shrink-0 border border-slate-200 relative ${
+                    className={`w-9.5 h-9.5 rounded-full overflow-hidden flex flex-col items-center justify-center font-bold text-lg shrink-0 border border-slate-200 relative ${
                       payer?.color || "bg-slate-100 text-slate-700"
                     }`}
                     title={`Người chi: ${payer?.name || "Chi chung"}`}
                   >
-                    <span>{payer?.emoji || "💸"}</span>
+                    {payer?.avatar ? (
+                      <img
+                        src={payer.avatar}
+                        alt={payer.name}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{payer?.emoji || "💸"}</span>
+                    )}
                     <span className="absolute -bottom-1 -right-1 bg-white border border-slate-100 px-0.5 text-[8px] rounded font-bold text-slate-500 shadow-xs">
                       CHI
                     </span>
@@ -186,7 +200,16 @@ export default function ExpenseList({
                               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border font-medium ${part.color}`}
                               title={`${part.name} gánh ${formatMoney(amtPerPerson)}`}
                             >
-                              <span>{part.emoji}</span>
+                              {part.avatar ? (
+                                <img
+                                  src={part.avatar}
+                                  alt={part.name}
+                                  referrerPolicy="no-referrer"
+                                  className="w-3.5 h-3.5 object-cover rounded-full border border-white/40 shrink-0"
+                                />
+                              ) : (
+                                <span>{part.emoji}</span>
+                              )}
                               <span>{part.name}</span>
                             </span>
                           );
@@ -208,26 +231,28 @@ export default function ExpenseList({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    {/* Pencil Edit button */}
-                    <button
-                      onClick={() => onEditExpense(expense)}
-                      className="p-1 px-2 text-slate-400 hover:text-indigo-650 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1 text-[11px] cursor-pointer font-extrabold border border-transparent hover:border-indigo-100"
-                      title="Sửa chi tiêu này"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      <span>Sửa</span>
-                    </button>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1.5">
+                      {/* Pencil Edit button */}
+                      <button
+                        onClick={() => onEditExpense(expense)}
+                        className="p-1 px-2 text-slate-400 hover:text-indigo-650 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1 text-[11px] cursor-pointer font-extrabold border border-transparent hover:border-indigo-100"
+                        title="Sửa chi tiêu này"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        <span>Sửa</span>
+                      </button>
 
-                    <button
-                      onClick={() => onDeleteExpense(expense.id)}
-                      className="p-1 px-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50/50 rounded-lg transition-colors flex items-center gap-1 text-[11px] cursor-pointer font-extrabold border border-transparent hover:border-rose-100"
-                      title="Xóa khoản chi này"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>Xóa</span>
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => onDeleteExpense(expense.id)}
+                        className="p-1 px-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50/50 rounded-lg transition-colors flex items-center gap-1 text-[11px] cursor-pointer font-extrabold border border-transparent hover:border-rose-100"
+                        title="Xóa khoản chi này"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Xóa</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

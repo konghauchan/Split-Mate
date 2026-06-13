@@ -118,8 +118,12 @@ export default function StatsSection({ members, expenses }: StatsSectionProps) {
               <div key={bal.memberId} className="space-y-1.5 focus-within:bg-slate-50 p-2 rounded-lg transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-xs border border-slate-200">
-                      {member.emoji}
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-xs border border-slate-200 overflow-hidden shrink-0">
+                      {member.avatar ? (
+                        <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        member.emoji
+                      )}
                     </span>
                     {member.name}
                   </span>

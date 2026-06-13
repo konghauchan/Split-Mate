@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "Group": {
+      "title": "Group",
+      "description": "Represents a split bill group owned by a leader and shared with members",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the group"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the bill splitting group"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "The firebase UID of the Gmail user who created and manages the group"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation date of the group"
+        },
+        "members": {
+          "type": "array",
+          "description": "List of members inside the group, each with their access codes"
+        },
+        "expenses": {
+          "type": "array",
+          "description": "List of expense bills inside the group"
+        },
+        "pendingReceipts": {
+          "type": "array",
+          "description": "List of payment proofs submitted by members"
+        }
+      },
+      "required": ["id", "name", "ownerId", "members", "expenses"]
+    }
+  },
+  "firestore": {
+    "/groups/{groupId}": {
+      "schema": "Group",
+      "description": "Stores all details about a specific bill splitting group"
+    }
+  }
+}

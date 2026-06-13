@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Member, Expense } from "../types";
-import { Receipt, Calendar, User, Users, AlertCircle, Sparkles, UploadCloud, X, ArrowLeft, Check, Image as ImageIcon } from "lucide-react";
+import { Receipt, Calendar, User, Users, AlertCircle, Sparkles, UploadCloud, X, ArrowLeft, Check, ChevronLeft, ChevronRight, Image as ImageIcon } from "lucide-react";
 
 interface ExpenseFormProps {
   members: Member[];
@@ -20,13 +20,53 @@ export default function ExpenseForm({
   const [description, setDescription] = useState("");
   const [amountStr, setAmountStr] = useState("");
   const [payerId, setPayerId] = useState("");
-  const [date, setDate] = useState(() => {
+  
+  const toDMY = (dateStr: string) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+
+  const [dateInput, setDateInput] = useState(() => {
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    return `${day}/${month}/${year}`;
   });
+
+  // Custom Vietnamese Calendar Dropdown states
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
+
+  useEffect(() => {
+    if (!showCalendar) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".calendar-popover-container") && !target.closest("#expense-date-wrapper")) {
+        setShowCalendar(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [showCalendar]);
+
+  const parseInputToCalendar = (val: string) => {
+    const parts = val.split("/");
+    if (parts.length === 3) {
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const y = parseInt(parts[2], 10);
+      if (!isNaN(d) && !isNaN(m) && !isNaN(y) && y >= 1990 && y <= 2100 && m >= 0 && m < 12 && d >= 1 && d <= 31) {
+        setCurrentMonth(m);
+        setCurrentYear(y);
+      }
+    }
+  };
 
   // Keep list of selected participants
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
@@ -42,7 +82,7 @@ export default function ExpenseForm({
       setDescription(editingExpense.description);
       setAmountStr(editingExpense.amount.toLocaleString("vi-VN"));
       setPayerId(editingExpense.payerId);
-      setDate(editingExpense.date);
+      setDateInput(toDMY(editingExpense.date));
       setSelectedParticipants(editingExpense.participantIds);
       setReceiptImage(editingExpense.receiptImage || null);
     } else {
@@ -50,9 +90,10 @@ export default function ExpenseForm({
         if (!payerId) {
           setPayerId(members[0].id);
         }
-        // Default to select everyone who is not already selected or all if state is empty
+        // Default to select active participants who are set of upcoming active
         if (selectedParticipants.length === 0) {
-          setSelectedParticipants(members.map((m) => m.id));
+          const activeParticipants = members.filter((m) => m.isUpcomingActive !== false);
+          setSelectedParticipants(activeParticipants.length > 0 ? activeParticipants.map((m) => m.id) : members.map((m) => m.id));
         } else {
           // Keeps only valid remaining member IDs
           const validIds = members.map((m) => m.id);
@@ -139,6 +180,24 @@ export default function ExpenseForm({
     setAmountStr(num.toLocaleString("vi-VN"));
   };
 
+  // Mask and format date: "1206" -> "12/06", "1206202" -> "12/06/202"
+  const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    // Keep only numbers
+    const digits = rawVal.replace(/\D/g, "");
+    let formatted = "";
+    if (digits.length > 0) {
+      formatted += digits.substring(0, 2);
+    }
+    if (digits.length > 2) {
+      formatted += "/" + digits.substring(2, 4);
+    }
+    if (digits.length > 4) {
+      formatted += "/" + digits.substring(4, 8);
+    }
+    setDateInput(formatted);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
@@ -166,13 +225,44 @@ export default function ExpenseForm({
       return;
     }
 
+    // Validate and parse dateInput (dd/mm/yyyy)
+    const datePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+    const dateMatch = dateInput.trim().match(datePattern);
+    if (!dateMatch) {
+      setErrorMsg("Ngày phát sinh chưa đúng định dạng dd/mm/yyyy (Ví dụ: 12/06/2026).");
+      return;
+    }
+
+    const dayInt = parseInt(dateMatch[1], 10);
+    const monthInt = parseInt(dateMatch[2], 10);
+    const yearInt = parseInt(dateMatch[3], 10);
+
+    if (monthInt < 1 || monthInt > 12) {
+      setErrorMsg("Tháng không hợp lệ (phải từ 01 đến 12).");
+      return;
+    }
+    if (dayInt < 1 || dayInt > 31) {
+      setErrorMsg("Ngày không hợp lệ (phải từ 01 đến 31).");
+      return;
+    }
+
+    // Checking if valid calendar day
+    const parsedDate = new Date(yearInt, monthInt - 1, dayInt);
+    if (parsedDate.getFullYear() !== yearInt || parsedDate.getMonth() !== monthInt - 1 || parsedDate.getDate() !== dayInt) {
+      setErrorMsg("Ngày phát sinh không tồn tại trong lịch.");
+      return;
+    }
+
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const formattedIsoDate = `${yearInt}-${pad(monthInt)}-${pad(dayInt)}`;
+
     if (editingExpense) {
       const updatedExpense: Expense = {
         id: editingExpense.id,
         description: trimmedDesc,
         amount,
         payerId,
-        date,
+        date: formattedIsoDate,
         participantIds: selectedParticipants,
         receiptImage: receiptImage || undefined,
       };
@@ -186,7 +276,7 @@ export default function ExpenseForm({
         description: trimmedDesc,
         amount,
         payerId,
-        date,
+        date: formattedIsoDate,
         participantIds: selectedParticipants,
         receiptImage: receiptImage || undefined,
       };
@@ -198,6 +288,106 @@ export default function ExpenseForm({
     setDescription("");
     setAmountStr("");
     setReceiptImage(null);
+
+    // Reset dateInput to today
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    setDateInput(`${day}/${month}/${year}`);
+  };
+
+  const VIETNAMESE_MONTHS = [
+    "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+    "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
+  ];
+  const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+  const buildCalendarGrid = () => {
+    const list: { day: number; isCurrent: boolean; dateObj: Date; isSelected: boolean; isToday: boolean }[] = [];
+    const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay(); // 0 is Sunday
+    const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const prevMonthDays = new Date(currentYear, currentMonth, 0).getDate();
+
+    // Leading padding days (from previous month)
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const dObj = new Date(currentYear, currentMonth - 1, prevMonthDays - i);
+      list.push({
+        day: prevMonthDays - i,
+        isCurrent: false,
+        dateObj: dObj,
+        isSelected: false,
+        isToday: isSameDay(dObj, new Date()),
+      });
+    }
+
+    // Days in current month
+    for (let d = 1; d <= totalDays; d++) {
+      const dObj = new Date(currentYear, currentMonth, d);
+      let isSel = false;
+      const parts = dateInput.split("/");
+      if (parts.length === 3) {
+        const dayI = parseInt(parts[0], 10);
+        const monthI = parseInt(parts[1], 10) - 1;
+        const yearI = parseInt(parts[2], 10);
+        if (d === dayI && currentMonth === monthI && currentYear === yearI) {
+          isSel = true;
+        }
+      }
+      list.push({
+        day: d,
+        isCurrent: true,
+        dateObj: dObj,
+        isSelected: isSel,
+        isToday: isSameDay(dObj, new Date()),
+      });
+    }
+
+    // Trailing padding days (from next month)
+    const totalCells = 42; // standard 6 rows grid
+    const remaining = totalCells - list.length;
+    for (let i = 1; i <= remaining; i++) {
+      const dObj = new Date(currentYear, currentMonth + 1, i);
+      list.push({
+        day: i,
+        isCurrent: false,
+        dateObj: dObj,
+        isSelected: false,
+        isToday: isSameDay(dObj, new Date()),
+      });
+    }
+
+    return list;
+  };
+
+  const isSameDay = (d1: Date, d2: Date) => {
+    return d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+  };
+
+  const selectDay = (dateObj: Date) => {
+    const d = String(dateObj.getDate()).padStart(2, "0");
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const y = dateObj.getFullYear();
+    setDateInput(`${d}/${m}/${y}`);
+    setShowCalendar(false);
+  };
+
+  const prevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear((y) => y - 1);
+    } else {
+      setCurrentMonth((m) => m - 1);
+    }
+  };
+
+  const nextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear((y) => y + 1);
+    } else {
+      setCurrentMonth((m) => m + 1);
+    }
   };
 
   const amount = getAmountNumber();
@@ -223,7 +413,20 @@ export default function ExpenseForm({
         {editingExpense && onCancelEdit && (
           <button
             type="button"
-            onClick={onCancelEdit}
+            onClick={() => {
+              setDescription("");
+              setAmountStr("");
+              setReceiptImage(null);
+              setErrorMsg("");
+              
+              const today = new Date();
+              const year = today.getFullYear();
+              const month = String(today.getMonth() + 1).padStart(2, "0");
+              const day = String(today.getDate()).padStart(2, "0");
+              setDateInput(`${day}/${month}/${year}`);
+              
+              onCancelEdit();
+            }}
             className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/70 px-2.5 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -304,28 +507,93 @@ export default function ExpenseForm({
             </div>
 
             {/* Date Pick */}
-            <div className="space-y-1">
+            <div className="space-y-1" id="expense-date-wrapper">
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider" htmlFor="expense-date">
                 Ngày phát sinh
               </label>
               <div className="relative">
                 <input
                   id="expense-date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 font-medium text-slate-800 text-sm transition-all cursor-pointer shadow-xs"
+                  type="text"
+                  placeholder="dd/mm/yyyy"
+                  maxLength={10}
+                  value={dateInput}
+                  onChange={handleDateInputChange}
+                  onFocus={() => {
+                    parseInputToCalendar(dateInput);
+                    setShowCalendar(true);
+                  }}
+                  onClick={() => {
+                    parseInputToCalendar(dateInput);
+                    setShowCalendar(true);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 pr-10 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 font-mono font-medium text-slate-800 text-sm transition-all shadow-xs"
                 />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <button
+                  type="button"
+                  onClick={() => {
+                    parseInputToCalendar(dateInput);
+                    setShowCalendar((prev) => !prev);
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
+                >
                   <Calendar className="h-4 w-4" />
-                </div>
+                </button>
+
+                {/* Custom Vietnamese Calendar Popover */}
+                {showCalendar && (
+                  <div className="calendar-popover-container absolute left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 z-50 animate-fade-in space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-50 pb-2">
+                      <button
+                        type="button"
+                        onClick={prevMonth}
+                        className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-all cursor-pointer"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                        {VIETNAMESE_MONTHS[currentMonth]} năm {currentYear}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={nextMonth}
+                        className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-all cursor-pointer"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-7 text-center text-[10px] font-extrabold text-slate-400">
+                      {WEEKDAYS.map((w) => (
+                        <div key={w} className="py-1">{w}</div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1 text-center">
+                      {buildCalendarGrid().map((cell, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => selectDay(cell.dateObj)}
+                          className={`h-7 w-7 mx-auto rounded-full text-[11px] font-bold flex items-center justify-center transition-all cursor-pointer ${
+                            cell.isSelected
+                              ? "bg-indigo-600 text-white shadow-xs shadow-indigo-600/30"
+                              : cell.isCurrent
+                              ? cell.isToday
+                                ? "bg-indigo-50 text-indigo-600 border border-indigo-200"
+                                : "text-slate-700 hover:bg-slate-100"
+                              : "text-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          {cell.day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-[10px] text-indigo-600 font-extrabold pl-1 pt-0.5">
-                Định dạng lưu: {(() => {
-                  if (!date) return "";
-                  const parts = date.split("-");
-                  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : date;
-                })()}
+              <p className="text-[10px] text-indigo-600 font-semibold pl-1 pt-0.5">
+                Nhập tay liên tục ví dụ: <span className="underline">12062026</span> để tự động thành <span className="font-bold">12/06/2026</span>
               </p>
             </div>
           </div>
@@ -433,10 +701,19 @@ export default function ExpenseForm({
                         : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100/50"
                     }`}
                   >
-                    <div className="relative">
-                      <span className="inline-block text-base">{m.emoji}</span>
+                    <div className="relative flex items-center justify-center">
+                      {m.avatar ? (
+                        <img
+                          src={m.avatar}
+                          alt={m.name}
+                          referrerPolicy="no-referrer"
+                          className="w-5 h-5 rounded-full object-cover border border-slate-200 inline-block shrink-0"
+                        />
+                      ) : (
+                        <span className="inline-block text-base">{m.emoji}</span>
+                      )}
                       {isSelected && (
-                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full border border-white"></div>
+                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-505 bg-indigo-600 rounded-full border border-white"></div>
                       )}
                     </div>
                     <span className="truncate flex-1">{m.name}</span>
